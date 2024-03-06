@@ -1,2 +1,2 @@
 # monkqueue
-Message Queue in Go
+Job Scheduler in Go
