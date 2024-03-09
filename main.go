@@ -33,7 +33,29 @@ func main() {
 	task := mq.NewTask("delete_file", payload)
 	err = client.Enqueue(task)
 	if err != nil {
+<<<<<<< Updated upstream
 		logger.Error("Error enqueuing task", slog.String("error:", err.Error()))
+=======
+		logger.Error("Error marshalling payload", slog.String("error:", err.Error()))
+	}
+
+	task_meta = mq.TaskMeta{
+		Payload:        payload,
+		MaxRetries:     3,
+		CurrentRetries: 0,
+		CronExpr:       "*/15 * * * * *", // Every 15 seconds
+	}
+
+	task = mq.NewTask("create_file", task_meta)
+	tasks = append(tasks, task)
+
+	// Enqueue the tasks
+	for _, t := range tasks {
+		err := client.Enqueue(t)
+		if err != nil {
+			logger.Error("Error enqueuing task", slog.String("error:", err.Error()))
+		}
+>>>>>>> Stashed changes
 	}
 	logger.Info("Task enqueued", slog.String("task_id:", task.Id))
 

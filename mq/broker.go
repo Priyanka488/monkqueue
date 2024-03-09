@@ -28,7 +28,14 @@ func (r *RedisBroker) Enqueue(task Task) error {
 		return err
 	}
 
-	cmd := r.RedisConnection.LPush(DEFAULT_QUEUE, taskBytes)
+	queue := DEFAULT_QUEUE
+
+	// If the task has a cron expression, it should be enqueued in the CRON_QUEUE
+	if task.Meta.CronExpr != "" {
+		queue = CRON_QUEUE
+	}
+
+	cmd := r.RedisConnection.LPush(queue, taskBytes)
 	if cmd.Err() != nil {
 		return cmd.Err()
 	}

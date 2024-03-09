@@ -18,6 +18,7 @@ type Server struct {
 	concurrency int
 	queues      []string
 	wg          sync.WaitGroup
+	scheduler   Scheduler
 }
 
 type ServeMux struct {
@@ -29,8 +30,9 @@ func NewServer(r RedisConfig, n int) *Server {
 	if n < 1 {
 		n = runtime.NumCPU()
 	}
+	scheduler := NewScheduler()
 
-	return &Server{broker: &RedisBroker{RedisConnection: *c.(*redis.Client)}, concurrency: n, queues: []string{DEFAULT_QUEUE}}
+	return &Server{broker: &RedisBroker{RedisConnection: *c.(*redis.Client)}, concurrency: n, queues: []string{DEFAULT_QUEUE, CRON_QUEUE}, scheduler: *scheduler}
 }
 
 func NewServeMux() *ServeMux {
@@ -43,6 +45,9 @@ func (sm *ServeMux) HandleFunc(name string, f func(*Task) error) {
 }
 
 func (s *Server) Run(mux *ServeMux) error {
+	s.scheduler.Start()
+	defer s.scheduler.Stop()
+
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	ctx := context.Background()
@@ -73,10 +78,40 @@ func (s *Server) worker(mux *ServeMux, ctx context.Context) {
 			if task == nil {
 				continue
 			}
+<<<<<<< Updated upstream
 			if f, ok := mux.mp[task.Name]; ok {
 				if err := f(task); err != nil {
 					logger.Error(fmt.Sprintf("Error processing task: %s", task.Name), slog.String("error", err.Error()))
 					continue
+=======
+
+			//  get the handler function for the task
+			handler, ok := mux.mp[task.Name]
+			if !ok {
+				logger.Error("No handler for task", slog.String("task_id:", task.Id))
+				continue
+			}
+
+			if task.Meta.CronExpr != "" {
+				_, err := s.scheduler.ScheduleTask(task, handler)
+				if err != nil {
+					logger.Error("Error scheduling task", slog.String("task_id:", task.Id))
+				}
+				continue
+			}
+
+			if err := handler(task); err != nil {
+				logger.Info("Retrying task ", slog.String("task_id:", task.Id))
+				task.Meta.CurrentRetries++
+				if task.Meta.CurrentRetries > task.Meta.MaxRetries {
+					logger.Error("Max retries reached, dropping task ", slog.String("task_id:", task.Id))
+					continue
+				}
+				time.Sleep(RETRY_DELAY * time.Second)
+				err := s.broker.Enqueue(*task)
+				if err != nil {
+					logger.Error("Error re-enqueuing task", slog.String("task_id:", task.Id))
+>>>>>>> Stashed changes
 				}
 			}
 		}
